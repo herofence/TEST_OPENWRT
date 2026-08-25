@@ -1,4 +1,4 @@
-name: Auto Build and Release ImmortalWrt Stable for R4S 1G
+name: R4S
 
 on:
   workflow_dispatch:
