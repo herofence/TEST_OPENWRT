@@ -1,0 +1,102 @@
+name: Build ImmortalWrt Firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      ssh:
+        description: 'SSH connection to Actions'
+        required: false
+        default: 'false'
+  schedule:
+    - cron: '0 20 * * 5'  # 每周五晚上8点自动构建 (UTC时间)
+
+env:
+  REPO_URL: https://github.com/immortalwrt/immortalwrt
+  REPO_BRANCH: openwrt-24.10
+  CONFIG_FILE: .config
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-part2.sh
+  UPLOAD_BIN_DIR: true
+  UPLOAD_FIRMWARE: true
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    if: github.event.repository.owner.id == github.event.sender.id || github.event_name == 'schedule'
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Initialization environment
+      run: |
+        sudo apt update
+        sudo apt install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+          bzip2 ccache clang cmake cpio curl device-tree-compiler flex gawk gcc-multilib g++-multilib \
+          gettext genisoimage git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev \
+          libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev \
+          libpython3-dev libreadline-dev libssl-dev libtool llvm lrzsz msmtp ninja-build p7zip p7zip-full \
+          patch pkgconf python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools \
+          subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+
+    - name: Clone source code
+      run: |
+        git clone --depth 1 --branch ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} openwrt
+        ln -sf /usr/share/zoneinfo/Asia/Shanghai openwrt/openwrt/package/base-files/files/etc/localtime
+
+    - name: Load custom configuration
+      run: |
+        [ -e ${{ env.CONFIG_FILE }} ] && mv ${{ env.CONFIG_FILE }} openwrt/.config
+        chmod +x ${{ env.DIY_P1_SH }} ${{ env.DIY_P2_SH }} 2>/dev/null || true
+
+    - name: Run diy-part1.sh
+      run: |
+        cd openwrt
+        [ -e ../${{ env.DIY_P1_SH }} ] && ../${{ env.DIY_P1_SH }} || true
+
+    - name: Update feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Run diy-part2.sh
+      run: |
+        cd openwrt
+        [ -e ../${{ env.DIY_P2_SH }} ] && ../${{ env.DIY_P2_SH }} || true
+
+    - name: Generate .config
+      run: |
+        cd openwrt
+        make defconfig
+
+    - name: Download package
+      run: |
+        cd openwrt
+        make download -j$(nproc)
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+
+    - name: Build firmware
+      id: compile
+      run: |
+        cd openwrt
+        echo -e "========================= Building Firmware ========================="
+        make -j$(nproc) || make -j1 V=s
+        echo "======================= Build completed ==========================="
+        cp .config config.seed
+
+    - name: Organize firmware files
+      run: |
+        cd openwrt
+        mkdir -p ../artifact/
+        find bin/targets/ -type f -name "*.*" ! -name "*.manifest" ! -name "*.buildinfo" -exec cp -v {} ../artifact/ \;
+        cd ../artifact/
+        ls -lh .
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ImmortalWrt_firmware
+        path: artifact/
