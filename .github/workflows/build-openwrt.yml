@@ -43,7 +43,8 @@ jobs:
     - name: Clone source code
       run: |
         git clone --depth 1 --branch ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} openwrt
-        ln -sf /usr/share/zoneinfo/Asia/Shanghai openwrt/openwrt/package/base-files/files/etc/localtime
+        # 修正：正确的路径是 openwrt/package/... 而非 openwrt/openwrt/...
+        ln -sf /usr/share/zoneinfo/Asia/Shanghai openwrt/package/base-files/files/etc/localtime
 
     - name: Load custom configuration
       run: |
