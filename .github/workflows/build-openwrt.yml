@@ -24,6 +24,9 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     if: github.event.repository.owner.id == github.event.sender.id || github.event_name == 'schedule'
+    # 新增权限：允许创建 Release
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout
@@ -43,7 +46,6 @@ jobs:
     - name: Clone source code
       run: |
         git clone --depth 1 --branch ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} openwrt
-        # 修正：正确的路径是 openwrt/package/... 而非 openwrt/openwrt/...
         ln -sf /usr/share/zoneinfo/Asia/Shanghai openwrt/package/base-files/files/etc/localtime
 
     - name: Load custom configuration
@@ -86,18 +88,36 @@ jobs:
         echo -e "========================= Building Firmware ========================="
         make -j$(nproc) || make -j1 V=s
         echo "======================= Build completed ==========================="
-        cp .config config.seed
+        cp .config config.seed   # 保存当前配置
 
     - name: Organize firmware files
       run: |
         cd openwrt
         mkdir -p ../artifact/
+        # 复制固件文件（保留原规则，排除 .manifest 和 .buildinfo）
         find bin/targets/ -type f -name "*.*" ! -name "*.manifest" ! -name "*.buildinfo" -exec cp -v {} ../artifact/ \;
+        # 额外复制 config.seed 为 build.config
+        cp config.seed ../artifact/build.config
         cd ../artifact/
         ls -lh .
 
-    - name: Upload artifact
+    - name: Upload artifact (保留为 Actions 的临时产物)
       uses: actions/upload-artifact@v4
       with:
         name: ImmortalWrt_firmware
         path: artifact/
+
+    # 新增步骤：创建 Release 并上传所有产物
+    - name: Create Release and Upload Assets
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: nightly-${{ github.run_number }}
+        name: Nightly Build #${{ github.run_number }}
+        body: |
+          Firmware built from ImmortalWrt ${{ env.REPO_BRANCH }} branch.
+          Triggered by ${{ github.event_name }}.
+        draft: false
+        prerelease: true          # 标记为预发布，避免污染正式版
+        files: artifact/*         # 上传 artifact 目录下的所有文件
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
