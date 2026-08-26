@@ -1,26 +1,291 @@
-Removing bundles/
+name: Build iStore OS for NanoPi M4
 
----> Making bundle: binary (in bundles/binary)
-Building static bundles/binary-daemon/dockerd (linux/amd64)...
-+ tee /home/runner/work/openwrt_immortalwrt/openwrt_immortalwrt/openwrt/build_dir/target-x86_64_musl/dockerd-27.3.1/go.mod
-module github.com/docker/docker
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "iStoreOS-*"
+  workflow_dispatch:
 
-go 1.21
-+ trap 'rm -f "${ROOTDIR}/go.mod"' EXIT
-+ GO111MODULE=on
-+ GOTOOLCHAIN=local
-+ go build -mod=vendor -modfile=vendor.mod -o bundles/binary-daemon/dockerd -tags 'netgo osusergo static_build ' -ldflags '-w -X "github.com/docker/docker/dockerversion.Version=27.3.1" -X "github.com/docker/docker/dockerversion.GitCommit=41ca978" -X "github.com/docker/docker/dockerversion.BuildTime=2026-08-12T03:53:45.000000000+00:00" -X "github.com/docker/docker/dockerversion.PlatformName=" -X "github.com/docker/docker/dockerversion.ProductName=" -X "github.com/docker/docker/dockerversion.DefaultProductLicense="  -extldflags -static ' -gcflags= github.com/docker/docker/cmd/dockerd
-+ rm -f /home/runner/work/openwrt_immortalwrt/openwrt_immortalwrt/openwrt/build_dir/target-x86_64_musl/dockerd-27.3.1/go.mod
-Created binary: bundles/binary-daemon/dockerd
-Copying nested executables into bundles/binary-daemon
-cp: cannot stat '': No such file or directory
-make[3]: *** [Makefile:185: /home/runner/work/openwrt_immortalwrt/openwrt_immortalwrt/openwrt/build_dir/target-x86_64_musl/dockerd-27.3.1/.built] Error 1
-make[3]: Leaving directory '/home/runner/work/openwrt_immortalwrt/openwrt_immortalwrt/openwrt/feeds/packages/utils/dockerd'
-time: package/feeds/packages/dockerd/compile#2.21#1.01#11.70
-    ERROR: package/feeds/packages/dockerd failed to build.
-make[2]: *** [package/Makefile:176: package/feeds/packages/dockerd/compile] Error 1
-make[2]: Leaving directory '/home/runner/work/openwrt_immortalwrt/openwrt_immortalwrt/openwrt'
-make[1]: *** [package/Makefile:170: /home/runner/work/openwrt_immortalwrt/openwrt_immortalwrt/openwrt/staging_dir/target-x86_64_musl/stamp/.package_compile] Error 2
-make[1]: Leaving directory '/home/runner/work/openwrt_immortalwrt/openwrt_immortalwrt/openwrt'
-make: *** [/home/runner/work/openwrt_immortalwrt/openwrt_immortalwrt/openwrt/include/toplevel.mk:233: world] Error 2
-Error: Process completed with exit code 2.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Free up disk space
+      uses: jlumbroso/free-disk-space@main
+      with:
+        tool-cache: false
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        docker-images: true
+        swap-storage: true
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ack antlr3 asciidoc autoconf automake binutils bison build-essential bzip2 ccache clang cmake cpio curl device-tree-compiler ecj fastjar flex gawk gettext gcc-multilib g++-multilib git gnutls-dev gperf haveged help2man intltool lib32gcc-s1 libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pip python3-ply python3-docutils python3-pyelftools python3-setuptools qemu-utils re2c rsync scons squashfs-tools subversion swig texinfo uglifyjs unzip vim wget xmlto xxd zlib1g-dev lz4
+
+    - name: Clone iStore OS
+      run: |
+        echo "=== Cloning iStore OS ==="
+        rm -rf istoreos
+        git clone -b istoreos-24.10 --depth 1 https://github.com/istoreos/istoreos.git
+
+    - name: Add NanoPi M4 device + U-Boot support
+      working-directory: istoreos
+      run: |
+        echo "=== Applying NanoPi M4 patches (device + U-Boot) ==="
+        ls -la ../patches/
+        for patch in ../patches/*.patch; do
+          echo "--- Applying $patch ---"
+          patch -p1 < "$patch" || { echo "ERROR: patch failed: $patch"; exit 1; }
+        done
+        echo "=== Verify device in armv8.mk ==="
+        grep -A8 "define Device/friendlyarm_nanopi-m4" target/linux/rockchip/image/armv8.mk
+        echo "=== Verify U-Boot target in uboot-rockchip/Makefile ==="
+        grep -A6 "U-Boot/nanopi-m4-rk3399" package/boot/uboot-rockchip/Makefile
+
+    - name: Configure network (LAN DHCP + USB WAN)
+      working-directory: istoreos
+      run: |
+        echo "=== Configuring LAN (DHCP on) + USB WAN ==="
+        mkdir -p files/etc/uci-defaults files/etc/hotplug.d/net
+        cat > files/etc/uci-defaults/99-nanopi-m4-network << 'NETEOF'
+        #!/bin/sh
+        # NanoPi M4 网络配置：单网口 LAN + USB WAN
+        # eth0 唯一网口 -> LAN（开启 DHCP，192.168.1.1/24）
+        # USB 网络设备（安卓USB共享 / CPE 4G/5G）-> WAN（DHCP 自动获取）
+        # 实际 USB 接口名由 /etc/hotplug.d/net/20-usb-wan 自动绑定
+        
+        # --- LAN: eth0 ---
+        uci set network.lan.device='eth0'
+        uci set network.lan.proto='static'
+        uci set network.lan.ipaddr='192.168.1.1'
+        uci set network.lan.netmask='255.255.255.0'
+        
+        # --- WAN: USB（默认 usb0，hotplug 会自动修正设备名）---
+        uci set network.wan=interface
+        uci set network.wan.proto='dhcp'
+        uci set network.wan.device='usb0'
+        uci set network.wan6=interface
+        uci set network.wan6.proto='dhcpv6'
+        uci set network.wan6.device='usb0'
+        uci set network.wan6.reqaddress='try'
+        uci set network.wan6.reqprefix='auto'
+        
+        # --- LAN DHCP 服务器：开启（192.168.1.100 - 192.168.1.250）---
+        uci set dhcp.lan=dhcp
+        uci set dhcp.lan.interface='lan'
+        uci set dhcp.lan.start='100'
+        uci set dhcp.lan.limit='150'
+        uci set dhcp.lan.leasetime='12h'
+        uci delete dhcp.lan.ignore 2>/dev/null || true
+        
+        # 防火墙：保留默认 wan/lan 区域（WAN 由防火墙 zone 管理）
+        
+        uci commit network
+        uci commit dhcp
+        uci commit firewall
+        
+        echo "NanoPi M4: LAN=eth0 (DHCP on 192.168.1.1), USB WAN enabled"
+        NETEOF
+        chmod +x files/etc/uci-defaults/99-nanopi-m4-network
+
+        cat > files/etc/hotplug.d/net/20-usb-wan << 'HOTEOF'
+        #!/bin/sh
+        # NanoPi M4 USB WAN 自动绑定：安卓USB共享 / CPE 4G/5G
+        [ "$ACTION" = "add" ] || exit 0
+        
+        # 跳过 LAN 口 eth0
+        [ "$INTERFACE" = "eth0" ] && exit 0
+        
+        case "$INTERFACE" in
+          usb[0-9]*|wwan[0-9]*|eth[1-9]*|enx[0-9a-fA-F]*)
+            uci set network.wan.device="$INTERFACE"
+            uci set network.wan6.device="$INTERFACE"
+            uci commit network
+            /etc/init.d/network reload 2>/dev/null
+            ;;
+        esac
+        exit 0
+        HOTEOF
+        chmod +x files/etc/hotplug.d/net/20-usb-wan
+
+    - name: Configure iStore OS
+      working-directory: istoreos
+      run: |
+        echo "=== Configuring iStore OS ==="
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+        cat > .config << 'EOF'
+        CONFIG_TARGET_rockchip=y
+        CONFIG_TARGET_rockchip_armv8=y
+        CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-m4=y
+        CONFIG_TARGET_ROOTFS_EXT4FS=y
+        CONFIG_TARGET_ROOTFS_SQUASHFS=y
+        CONFIG_TARGET_ROOTFS_PARTSIZE=4096
+        CONFIG_PACKAGE_luci=y
+        CONFIG_PACKAGE_luci-theme-bootstrap=y
+        CONFIG_PACKAGE_luci-app-dockerman=y
+        CONFIG_PACKAGE_docker-ce=y
+        CONFIG_PACKAGE_docker-ce-cli=y
+        CONFIG_PACKAGE_containerd=y
+        
+        # 4G/5G 模组 & 安卓USB网络共享 (QMI/NCM/RNDIS/MBIM)
+        CONFIG_PACKAGE_kmod-usb-net=y
+        CONFIG_PACKAGE_kmod-usb-net-cdc-ether=y
+        CONFIG_PACKAGE_kmod-usb-net-cdc-mbim=y
+        CONFIG_PACKAGE_kmod-usb-net-cdc-ncm=y
+        CONFIG_PACKAGE_kmod-usb-net-huawei-cdc-ncm=y
+        CONFIG_PACKAGE_kmod-usb-net-qmi-wwan=y
+        CONFIG_PACKAGE_kmod-usb-net-rndis=y
+        CONFIG_PACKAGE_kmod-usb-serial-option=y
+        CONFIG_PACKAGE_kmod-usb-serial-qualcomm=y
+        CONFIG_PACKAGE_uqmi=y
+        CONFIG_PACKAGE_usb-modeswitch=y
+        CONFIG_PACKAGE_comgt=y
+        CONFIG_PACKAGE_wwan=y
+        
+        # NAS: SMB/NFS 文件共享
+        CONFIG_PACKAGE_luci-app-samba4=y
+        CONFIG_PACKAGE_kmod-fs-nfs=y
+        CONFIG_PACKAGE_kmod-fs-nfs-v4=y
+        CONFIG_PACKAGE_nfs-utils=y
+        
+        # 磁盘管理
+        CONFIG_PACKAGE_luci-app-diskman=y
+        CONFIG_PACKAGE_block-mount=y
+        CONFIG_PACKAGE_e2fsprogs=y
+        CONFIG_PACKAGE_kmod-fs-ntfs3=y
+        
+        # Docker Compose
+        CONFIG_PACKAGE_docker-compose=y
+        CONFIG_PACKAGE_luci-app-store=y
+        CONFIG_PACKAGE_kmod-usb2=y
+        CONFIG_PACKAGE_kmod-usb3=y
+        CONFIG_PACKAGE_kmod-usb-storage=y
+        EOF
+        make defconfig
+        echo "=== Selected device ==="
+        grep "DEVICE_friendlyarm" .config || echo "No FriendlyARM device selected!"
+
+    - name: Download packages
+      working-directory: istoreos
+      run: make download -j8
+
+    - name: Compile iStore OS rootfs
+      working-directory: istoreos
+      run: |
+        echo "=== Compiling iStore OS ==="
+        make -j$(nproc) V=s || make -j1 V=s
+        echo BUILD_STATUS=success >> $GITHUB_ENV
+
+    - name: Clone sd-fuse_rk3399
+      if: env.BUILD_STATUS == 'success'
+      run: |
+        echo "=== Cloning sd-fuse_rk3399 ==="
+        git clone -b kernel-6.6.y --depth 1 https://github.com/friendlyarm/sd-fuse_rk3399.git
+        cd sd-fuse_rk3399
+        echo "=== Downloading pre-built images ==="
+        wget -q https://downloads.friendlyelec.com/os-images/rk3399/images/friendlywrt25-images.tgz || \
+        wget -q https://downloads.friendlyelec.com/os-images/rk3399/images/openmediavault-arm64-images.tgz || echo "Download failed"
+        ls -la
+        if [ -f "friendlywrt25-images.tgz" ]; then
+          tar xvzf friendlywrt25-images.tgz
+          echo "=== friendlywrt25 images extracted ==="
+          ls -la friendlywrt25/
+        elif [ -f "openmediavault-arm64-images.tgz" ]; then
+          tar xvzf openmediavault-arm64-images.tgz
+          echo "=== openmediavault images extracted ==="
+          ls -la openmediavault-arm64/
+        fi
+
+    - name: Create iStore OS image
+      if: env.BUILD_STATUS == 'success'
+      run: |
+        echo "=== Creating bootable image ==="
+        cd sd-fuse_rk3399
+        if [ -d "friendlywrt25" ]; then
+          BASE_OS="friendlywrt25"
+        elif [ -d "openmediavault-arm64" ]; then
+          BASE_OS="openmediavault-arm64"
+        else
+          echo "ERROR: No base OS found!"
+          exit 1
+        fi
+        echo "Using base OS: $BASE_OS"
+        cp -r "$BASE_OS" istoreos-nanopi-m4
+        ROOTFS_TAR=$(find ../istoreos/bin/targets -name "rootfs.tar.gz" | head -1)
+        if [ -n "$ROOTFS_TAR" ]; then
+          echo "Found rootfs: $ROOTFS_TAR"
+          sudo rm -rf istoreos-nanopi-m4/rootfs
+          sudo mkdir -p istoreos-nanopi-m4/rootfs
+          sudo tar xzf "$ROOTFS_TAR" -C istoreos-nanopi-m4/rootfs/
+          echo "Rootfs replaced"
+        else
+          echo "WARNING: Using default rootfs"
+        fi
+        export SDFUSE_NONINTERACTIVE=y
+        ./mk-sd-image.sh istoreos-nanopi-m4
+        echo "=== Image build complete ==="
+        ls -la out/*.img 2>/dev/null || echo "No image found"
+
+    - name: Organize output
+      if: env.BUILD_STATUS == 'success'
+      run: |
+        mkdir -p output
+        if [ -f "sd-fuse_rk3399/out/rk3399-sd-*.img" ]; then
+          cp sd-fuse_rk3399/out/rk3399-sd-*.img output/
+        fi
+        find istoreos/bin/targets -name "*.img.gz" -exec cp {} output/ \; 2>/dev/null || true
+        find istoreos/bin/targets -name "*.img" -exec cp {} output/ \; 2>/dev/null || true
+        echo "=== Output files ==="
+        ls -la output/
+
+    - name: Upload firmware
+      uses: actions/upload-artifact@v4
+      if: env.BUILD_STATUS == 'success'
+      with:
+        name: iStoreOS-NanoPiM4-${{ github.run_id }}
+        path: output/
+
+    - name: Generate release tag
+      id: tag
+      if: env.BUILD_STATUS == 'success'
+      run: echo "RELEASE_TAG=iStoreOS-NanoPiM4-$(date +%Y.%m.%d.%H%M)" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      if: env.BUILD_STATUS == 'success'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.tag.outputs.RELEASE_TAG }}
+        name: "iStore OS NanoPi M4 Build ${{ github.run_id }}"
+        body: |
+          ## iStore OS NanoPi M4 Build
+          ### Features
+          - Docker support
+          - iStore App Store
+          - Official U-Boot v2017.09
+          ### Default Login
+          - Address: 192.168.1.1
+          - Password: password
+          ### Write to TF card
+          sudo dd if=output/rk3399-sd-*.img of=/dev/sdX bs=4M status=progress
+        files: |
+          output/*.img.gz
+          output/*.img
+        draft: false
+        prerelease: false
+        fail_on_unmatched_files: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
