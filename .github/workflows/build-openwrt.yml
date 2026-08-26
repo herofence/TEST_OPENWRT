@@ -1,4 +1,4 @@
-name: Build NanoPi M4 ImmortalWrt Firmware
+name: ImmortalWrt Firmware
 
 on:
   push:
