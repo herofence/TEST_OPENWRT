@@ -1,0 +1,17 @@
+--- a/target/linux/rockchip/image/armv8.mk
++++ b/target/linux/rockchip/image/armv8.mk
+@@ -116,6 +116,14 @@ TARGET_DEVICES += friendlyarm_nanopc-t4
+ TARGET_DEVICES += friendlyarm_nanopc-t4
+ 
++define Device/friendlyarm_nanopi-m4
++  DEVICE_VENDOR := FriendlyARM
++  DEVICE_MODEL := NanoPi M4
++  SOC := rk3399
++  BOOT_FLOW := pine64-bin
++endef
++TARGET_DEVICES += friendlyarm_nanopi-m4
++
+ define Device/friendlyarm_nanopc-t6
+   DEVICE_VENDOR := FriendlyARM
+   DEVICE_MODEL := NanoPC T6
+   SOC := rk3588
