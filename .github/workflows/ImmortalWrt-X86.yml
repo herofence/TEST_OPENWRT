@@ -11,6 +11,7 @@ env:
   CONFIG_FILE: configs/X86.config
   ENV_SH: scripts/environment.sh
   DIY_P1_SH: scripts/diy-part1.sh
+  DIY_P2_SH: scripts/diy-part2.sh
   THEME_SETTING_SH: scripts/theme-setting.sh
   PRESET_CLASH_SH: scripts/preset-clash-core.sh
   UPLOAD_FIRMWARE: true
@@ -86,13 +87,7 @@ jobs:
           COMMIT_HASH=$(git show -s --date=short --format="hash: %H" 2>/dev/null || echo "hash: 未知")
           echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_ENV
 
-      - name: 更新和安装源
-        working-directory: ./openwrt
-        run: |
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
-      - name: 加载默认配置
+      - name: 加载自定义软件源
         run: |
           chmod +x $DIY_P1_SH $OPENWRT_NAME/*.sh
           cd openwrt
@@ -101,9 +96,23 @@ jobs:
           bash $GITHUB_WORKSPACE/$THEME_SETTING_SH
           bash $GITHUB_WORKSPACE/$PRESET_CLASH_SH amd6
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          
 
-      - name: 下载安装包
+      - name: 更新和安装源
+        working-directory: ./openwrt
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: 加载自定义配置
+        run: |
+          set -euo pipefail
+          cp $CONFIG_FILE openwrt/.config
+          chmod +x $DIY_P2_SH
+          cd openwrt
+          "$GITHUB_WORKSPACE/$DIY_P2_SH"
+
+      - name: 更新软件源
         id: package
         run: |
           cd openwrt
