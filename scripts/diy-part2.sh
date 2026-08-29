@@ -1,12 +1,5 @@
 #!/bin/bash
 # 配置修改
-# 1.替换 luci-app-docker 为官方版本
-if [ -d "package/feeds/luci/luci-app-docker" ]; then
-    rm -rf package/feeds/luci/luci-app-docker
-fi
-git clone --depth 1 --branch openwrt-23.05 https://github.com/openwrt/luci.git /tmp/luci-official
-cp -r /tmp/luci-official/applications/luci-app-docker package/feeds/luci/
-rm -rf /tmp/luci-official
 
 # 2. 修改默认主题
 sed -i 's/luci-theme-design/luci-theme-argon/g' feeds/luci/collections/luci/Makefile
