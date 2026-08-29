@@ -175,13 +175,16 @@ jobs:
         if: env.UPLOAD_RELEASE == 'true' && !cancelled()
         run: |
           echo "release_tag=${{ env.date1 }}_build${{ github.run_number }}" >> $GITHUB_OUTPUT
+          # 生成新格式的发布名称
+          RELEASE_NAME="immortalwrt-${{ env.date1 }}-$(date +%H%M)"
+          echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_ENV
           cat << EOF > release.txt
-          ### ✨固件信息
+          ###✨固件信息
           - 🖥️平台架构: ${{ env.DEVICE_TARGET }}-${{ env.DEVICE_SUBTARGET }}
-          - 🏪固件源码: ${{ env.REPO_URL }}
-          - 📁源码分支: ${{ env.REPO_BRANCH }}
-          - 🐳内核版本: ${{ env.KERNEL_VER }}
-          - 📱默认地址: 192.168.2.1
+          - 📥固件源码: ${{ env.REPO_URL }}
+          - 🐳源码分支: ${{ env.REPO_BRANCH }}
+          - 📁内核版本: ${{ env.KERNEL_VER }}
+          - 🏪默认地址: 192.168.2.1
           - ⚡默认密码: password
           ### 固件版本
           - 固件编译前最后一次[主源码](${{ env.REPO_URL }}) 更新记录
@@ -199,6 +202,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: ${{ env.FIRMWARE }}/*
-          name: ${{ env.date2 }} 发布
+          name: ${{ env.RELEASE_NAME }}
           tag_name: ${{ steps.tag.outputs.release_tag }}
           body_path: release.txt
