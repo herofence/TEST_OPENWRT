@@ -116,8 +116,6 @@ jobs:
         id: compile
         run: |
           cd openwrt
-          # 关键修复：删除宿主机自带的 runc，避免 dockerd 构建时错误复制不存在的文件
-          sudo rm -f /usr/local/bin/runc
           export GO111MODULE=on
           export GOPROXY=https://goproxy.cn,direct
           export GOTOOLCHAIN=auto
