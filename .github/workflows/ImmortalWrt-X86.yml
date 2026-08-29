@@ -116,22 +116,18 @@ jobs:
           cd openwrt
           # 关键修复：删除宿主机自带的 runc，避免 dockerd 构建时错误复制不存在的文件
           sudo rm -f /usr/local/bin/runc
-
           export GO111MODULE=on
           export GOPROXY=https://goproxy.cn,direct
           export GOTOOLCHAIN=auto
           echo -e "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
-
           echo "date1=$(date +'%Y.%m.%d')" >> $GITHUB_ENV
           echo "date2=$(date "+%Y年%m月%d日")" >> $GITHUB_ENV
           echo "status=success" >> $GITHUB_OUTPUT
-
           DEVICE_TARGET=$(cat .config | grep CONFIG_TARGET_BOARD | awk -F '"' '{print $2}' 2>/dev/null || echo "x86")
           echo "DEVICE_TARGET=$DEVICE_TARGET" >> $GITHUB_ENV
           DEVICE_SUBTARGET=$(cat .config | grep CONFIG_TARGET_SUBTARGET | awk -F '"' '{print $2}' 2>/dev/null || echo "64")
           echo "DEVICE_SUBTARGET=$DEVICE_SUBTARGET" >> $GITHUB_ENV
-
           KERNEL_VER=$(cat bin/targets/${DEVICE_TARGET}/${DEVICE_SUBTARGET}/*.manifest 2>/dev/null | grep ^kernel | head -1 | cut -d- -f2 | tr -d ' ' || echo "未知")
           echo "KERNEL_VER=$KERNEL_VER" >> $GITHUB_ENV
 
@@ -140,9 +136,7 @@ jobs:
         if: ${{ env.UPLOAD_FIRMWARE == 'true' && !cancelled() }}
         run: |
           cd openwrt/bin/targets/${{ env.DEVICE_TARGET }}/${{ env.DEVICE_SUBTARGET }}
-
           [ -f "$OPENWRT_PATH/.config" ] && cp "$OPENWRT_PATH/.config" build.config
-
           cat << EOF > config.buildinfo
           CONFIG_TARGET_BOARD=${{ env.DEVICE_TARGET }}
           CONFIG_TARGET_SUBTARGET=${{ env.DEVICE_SUBTARGET }}
@@ -153,14 +147,11 @@ jobs:
           CONFIG_BUILD_NUMBER=${{ github.run_number }}
           CONFIG_RANDOM_CODE=${{ github.run_number }}
           EOF
-
           echo "清理不需要的文件..."
           rm -rf packages
           rm -f *rootfs.tar.gz *.json sha256sums *.manifest
-
           echo "最终保留的文件："
           ls -lah
-
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
           echo "status=success" >> $GITHUB_OUTPUT
 
