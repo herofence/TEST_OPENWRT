@@ -54,6 +54,8 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          sudo docker image prune --all --force
+          sudo rm -f /usr/local/bin/runc
           chmod +x $ENV_SH
           bash $ENV_SH
           sudo -E apt-get -qq autoremove --purge > /dev/null
