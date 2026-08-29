@@ -17,8 +17,6 @@ env:
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
-  OPENWRT_NAME: scripts
-  OPENWRT_NAME1: configs
 
 jobs:
   build:
