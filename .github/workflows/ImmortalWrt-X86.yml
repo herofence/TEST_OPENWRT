@@ -22,7 +22,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
-
     steps:
       - name: 容量设置
         uses: easimon/maximize-build-space@master
@@ -199,7 +198,6 @@ jobs:
           - 时间: $COMMIT_BJ
           - ${{ env.COMMIT_MESSAGE }}
           - ${{ env.COMMIT_HASH }}
-          - 作者: $COMMIT_AUTHOR_FIXED
           EOF
           echo "status=success" >> $GITHUB_OUTPUT
 
