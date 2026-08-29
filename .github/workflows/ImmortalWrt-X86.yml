@@ -168,7 +168,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: steps.organize.outputs.status == 'success' && !cancelled()
         with:
-          name: immortalwrt_${{ env.date1 }}_${{ env.OPENWRT_NAME }}_${{ env.OPENWRT_NAME1 }}
+          name: immortalwrt_${{ env.date1 }}_${{ env.DEVICE_TARGET }}_${{ env.DEVICE_SUBTARGET }}
           path: ${{ env.FIRMWARE }}
 
       - name: 发布固件
