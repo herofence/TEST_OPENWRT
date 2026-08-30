@@ -156,7 +156,7 @@ jobs:
           EOF
           echo "清理不需要的文件..."
           rm -rf packages
-          # rm -f *rootfs.tar.gz *.json sha256sums *.manifest
+          rm -f *rootfs.tar.gz *.json sha256sums *.manifest
           echo "最终保留的文件："
           ls -lah
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
