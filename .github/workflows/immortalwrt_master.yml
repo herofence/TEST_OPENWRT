@@ -7,7 +7,7 @@ on:
 
 env:
   REPO_URL: https://github.com/immortalwrt/immortalwrt
-  REPO_BRANCH: openwrt-master
+  REPO_BRANCH: master
   CONFIG_FILE: configs/X86.config
   ENV_SH: scripts/environment.sh
   DIY_P1_SH: scripts/diy-part1.sh
