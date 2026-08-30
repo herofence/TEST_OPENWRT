@@ -10,8 +10,8 @@ env:
   REPO_BRANCH: master
   CONFIG_FILE: configs/X86.config
   ENV_SH: scripts/environment.sh
-  DIY_P1_SH: scripts/diy-part1.sh
-  DIY_P2_SH: scripts/diy-part2.sh
+  DIY_P1_SH: scripts/diy-part3.sh
+  DIY_P2_SH: scripts/diy-part4.sh
   THEME_SETTING_SH: scripts/theme-setting.sh
   PRESET_CLASH_SH: scripts/preset-clash-core.sh
   SYSTEM_INFO: scripts/system-Information.sh
