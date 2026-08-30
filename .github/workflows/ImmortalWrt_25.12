@@ -3,8 +3,7 @@ name: ImmortalWrt_25.12
 on:
   workflow_dispatch:
   schedule:
-  # 每周四 5:00执行一次
-    - cron: 0 21 * * WED
+
 
 permissions:
   contents: write
